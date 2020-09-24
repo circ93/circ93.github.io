@@ -1,0 +1,973 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Project Interactive Graphics</title>
+        <style>
+            body {
+                margin: 0;
+                overflow: hidden;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="info" style="font-size: 1.4em; color: #ffffffa3; position: absolute; margin-top: 2%; margin-left: 3%;">
+            <b>Instructions for Use:</b>
+            <br><br>
+            Press W, A, S, D to move Android Robot
+            <br>
+            Use Left Mouse Button for move Camera
+            <br>
+            Use Mouse Wheel to zoom scene
+
+        </div>
+        
+        <script type="text/javascript" src="libs/tweenjs/tween.umd.js"></script>
+        <script type="text/javascript" src="libs/oimojs/oimo.js"></script>
+        <script type="module">
+
+            import * as THREE from './libs/threejs/build/three.module.js';
+
+            import { OrbitControls } from './libs/threejs/examples/jsm/controls/OrbitControls.js';
+
+            import { GLTFLoader } from './libs/threejs/examples/jsm/loaders/GLTFLoader.js';
+
+            import * as dat from './libs/threejs/examples/jsm/libs/dat.gui.module.js';
+
+            // global variables
+            var scene;
+            var renderer;
+            var camera;
+            var orbitControls;
+            var materialArray = [];
+
+            // variables ObjectMesh
+            var model;
+            var harmSX;
+            var harmDX;
+            var legSX;
+            var legDX;
+            var torso;
+
+            // options TweenAnimation
+            var userOpts    = {
+                positionLeg : 0.8,
+                initialHarm : 2.5,
+                positionHarm: 3.8,
+                positionTorso: 0.05,
+                duration    : 500,
+                delay       : 100,
+                easing      : 'Sinusoidal.InOut'
+            };
+
+            var move = {
+
+                forward: false,
+                backward: false,
+                left: false,
+                right: false,
+
+                };
+
+            var tweenHeadLeg;
+            var tweenHeadHarm;
+            var tweenHeadTorso;
+
+            // light variables
+            var target;
+
+            // Geometry
+            var objects = [];
+            var cube_1;
+
+            // oimo variables
+            var content;
+            var paddel;
+            var rotTest;
+            var ToRad = Math.PI / 180;
+
+            var world = null;
+            var bodys = null;
+            var infos;
+            var type = 1;
+
+            var bufferRandomGeometry;
+            var materialRandomGeometry;
+            var planeMaterial;
+            var planeGeometry;
+            var cage;
+            var materialCage;
+            var barrier = { barrier: false };
+
+            var meshs = [];
+            var grounds = [];
+
+            // gui
+            var axesHelper;
+            var spotLight;
+            var colorLight = {};
+            var spotHelper;
+            var ambient;
+            var directionalLight;
+            var dirLightHelper;
+            var pointLight;
+            var pointLightHelper
+
+            function init() {
+
+                // create a scene, that will hold all our elements such as objects, cameras and lights.
+                scene = new THREE.Scene();
+
+                // set backgroun color for the scene
+                scene.background = backgroundSceneTexture();
+
+                // create a camera, which defines where we're looking at.
+                camera = new THREE.PerspectiveCamera(35, window.innerWidth / window.innerHeight, 1, 10000);
+                camera.position.set(0,2000,4000);
+
+                // create a render, sets the background color and the size
+                renderer = new THREE.WebGLRenderer({antialias:true});
+                renderer.setClearColor(0x000000, 1.0);
+                renderer.setPixelRatio( window.devicePixelRatio );
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                renderer.shadowMap.enabled = true;
+                renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                //renderer.depthBuffer = false;
+
+                // add the output of the renderer to the html element
+                document.body.appendChild(renderer.domElement);
+
+                content = new THREE.Object3D();
+                scene.add(content);
+
+                // ###################### //
+                // #### OrbitControl #### //
+                // ###################### //
+
+                // add control for OrbitCamera and set parameters
+                orbitControls = new OrbitControls( camera, renderer.domElement );
+
+                orbitControls.enableDamping = true; 
+                orbitControls.dampingFactor = 0.05;
+                orbitControls.screenSpacePanning = false;
+                orbitControls.minDistance = 1000;
+                orbitControls.maxDistance = 7000;
+                orbitControls.maxPolarAngle = Math.PI / 1.5;
+                orbitControls.rotateSpeed = 0.3;
+
+                // ############### //
+//              // #### Plane #### //
+                // ############### //
+
+                //Create a plane that receives shadows
+                planeGeometry = new THREE.PlaneBufferGeometry( 3000, 3000, 100);
+                // load texture for plane
+                var texturePlane = new THREE.TextureLoader().load( 'texture/steel.png' );
+                texturePlane.wrapS = THREE.RepeatWrapping;
+                texturePlane.wrapT = THREE.RepeatWrapping;
+                texturePlane.repeat.set( 6, 6 );                
+                planeMaterial = new THREE.MeshLambertMaterial( { color: 0xffffff, map:texturePlane, side: THREE.DoubleSide } );
+
+                // ################## //
+                // #### Geometry #### //
+                // ################## //
+
+                // random geometry
+                bufferRandomGeometry = new THREE.BufferGeometry();
+                bufferRandomGeometry.fromGeometry(new THREE.CubeGeometry(200,200,200) );
+
+                //textureBox
+                var textureBox = new THREE.TextureLoader().load( 'texture/woodbox.png' );
+                textureBox.wrapS = THREE.RepeatWrapping;
+                textureBox.wrapT = THREE.RepeatWrapping;
+                textureBox.repeat.set( 1, 1 );
+
+                materialRandomGeometry = new THREE.MeshPhongMaterial( {map: textureBox, name:'woodBox'} );
+
+                materialCage = new THREE.MeshLambertMaterial( {color: 0xffffff, wireframe: true} );
+                materialCage.visible = false;
+
+                // gabbia modello per spinge gli altri box
+                cage = new THREE.Object3D();
+
+                // ############### //
+                // #### Light #### //
+                // ############### //
+
+                colorLight = {
+                    ambient: '#ffffff',
+                    directional: '#ffffff',
+                    point: '#ffffff',
+                    spot: '#ffffff'
+                }
+
+                // Ambient light
+                ambient = new THREE.AmbientLight(0xffffff, 0.5);
+                scene.add(ambient);
+
+                // Directional light
+                directionalLight = new THREE.DirectionalLight( 0xffffff, 0.5);
+                directionalLight.castShadow = true;
+                scene.add( directionalLight );
+
+                //Point light
+                pointLight = new THREE.PointLight(0xffffff, 0.5);
+                pointLight.position.set(0,1000,0);
+                pointLight.castShadow = true;
+                pointLight.shadow.camera.near = 500;
+                pointLight.shadow.camera.far = 2400;
+                scene.add(pointLight);
+
+                // target for Spotlight
+                target = new THREE.Object3D();
+                var posTarget = new THREE.Vector3(0, 100, 0);
+                target.position.copy(posTarget);
+
+                // Spotlight
+                var colorSpotlight = 0xff5555;
+
+                spotLight = new THREE.SpotLight(colorLight.spot, 0.5);
+                spotLight.position.set(0, 1000, 0);
+                spotLight.castShadow = true;
+                spotLight.shadow.camera.near = 500;
+                spotLight.shadow.camera.far = 2000;
+                spotLight.angle = degToRad(15);
+                spotLight.target = target;
+
+                scene.add(spotLight.target);
+                scene.add(spotLight);
+       
+                // ############### //
+                // #### Model #### //
+                // ############### //
+
+                // load model
+                var loader = new GLTFLoader();
+
+                loader.load( 'models/android/scene.gltf', function ( gltf ) {
+                    model = gltf.scene.children[0].children[0].children[0].children[0].children[0].children[0];
+
+                    legSX = gltf.scene.children[0].children[0].children[0].children[0].children[0].children[0].children[1];
+
+                    legDX = gltf.scene.children[0].children[0].children[0].children[0].children[0].children[0].children[2];
+
+                    harmSX = gltf.scene.children[0].children[0].children[0].children[0].children[0].children[0].children[0].children[1];
+
+                    harmDX = gltf.scene.children[0].children[0].children[0].children[0].children[0].children[0].children[0].children[2];
+
+                    torso = gltf.scene.children[0].children[0].children[0].children[0].children[0].children[0].children[0];
+
+                    console.log("modello: " + model.name);
+                    console.log("gamba sx: " + legSX.name);
+                    console.log("gamba dx: " + legDX.name);
+                    console.log("braccio sx: " + harmSX.name);
+                    console.log("braccio dx: " + harmDX.name);
+                    console.log("torso: " + torso);
+                    console.log(model);
+
+                    model.scale.set(30,30,30);
+                    model.position.set(0,50,0);
+                    model.rotation.x = Math.PI;
+
+                    // to enable shadow to the model
+                    enableShadowChild(model);
+
+                    // add model to the scene
+                    scene.add(model);
+
+                }, undefined, function ( error ) {
+
+                    console.error( error );
+
+                } );
+
+                // ################ //
+                // #### HELPER #### //
+                // ################ //
+                axesHelper = new THREE.AxesHelper( 500 );
+                axesHelper.visible = false;
+                scene.add( axesHelper );
+
+                // asse x   --> red
+                // asse y   --> green
+                // asse z   --> blue
+
+                spotHelper = new THREE.CameraHelper( spotLight.shadow.camera );
+                spotHelper.visible = false;
+                scene.add( spotHelper );
+
+                dirLightHelper = new THREE.DirectionalLightHelper( directionalLight, 500 );
+                dirLightHelper.visible = false;
+                scene.add( dirLightHelper );
+
+                var sphereSize = 10;
+                pointLightHelper = new THREE.PointLightHelper( pointLight, sphereSize );
+                pointLightHelper.visible = false;
+                scene.add( pointLightHelper );
+
+                // #################### //
+                // #### END HELPER #### //
+                // #################### //
+
+                // initial setup of the tweens
+                setupTween();
+
+                // in case the window is resized
+                window.addEventListener( 'resize', windowResize, false );
+
+                // Listening for keyboard event
+                document.addEventListener('keydown', (e) => _onKeyDown(e), false);
+                document.addEventListener('keyup', (e) => _onKeyUp(e), false);
+
+                // div con info su world di oimo
+                infos = document.getElementById("info");
+
+                // physics
+                initOimoPhysics();
+
+                // create GUi
+                createGUI();
+
+                // call the render function
+                render();
+            }
+
+            // ######################## //
+            // ##### OIMO PHYSICS ##### //
+            // ######################## //
+
+            function initOimoPhysics(){
+
+                world = new OIMO.World({info:true, worldscale:100});
+                world.setGravity([0, -9.8, 0]);
+
+                populate(1);
+
+            };
+
+            function populate(n) {
+
+                // The Bit of a collision group
+                var group1 = 1 << 0;  // 00000000 00000000 00000000 00000001
+                var group2 = 1 << 1;  // 00000000 00000000 00000000 00000010
+                var group3 = 1 << 2;  // 00000000 00000000 00000000 00000100
+                var all = 0xffffffff; // 11111111 11111111 11111111 11111111
+
+                //var max = document.getElementById("MaxNumber").value;
+                var max = 20;
+
+                // type of woodbox
+                type = 3;
+
+                // reset old
+                clearMesh();
+                world.clear();
+                bodys = [];
+
+                // Is all the physics setting for rigidbody
+                var config = [
+                    1, // The density of the shape.
+                    0.4, // The coefficient of friction of the shape.
+                    0.2, // The coefficient of restitution of the shape.
+                    1, // The bits of the collision groups to which the shape belongs.
+                    all // The bits of the collision groups with which the shape collides.
+                ];
+
+                // config[3] --> I bit dei gruppi di collisione a cui appartiene la forma.
+                // config[4] --> I bit dei gruppi di collisione con cui la forma si scontra.                
+
+                //add ground (superficie d'appoggio dei woodbox, non si vede)
+                var ground = world.add({size:[3000, 1, 3000], pos:[0,0,0], rot:[0,0,0], config:config});
+                // visible plane whit texture
+                addPlane([1, 1, 1], [0, 0, 0], [-Math.PI/2,0,0]);
+
+                // add barriere
+                config[3] = group3;
+
+                var barrier_01 = world.add({size:[3000, 300, 1], pos:[0,150,1500], rot:[0,0,0], config:config, name: 'barrier'});
+
+                var barrier_02 = world.add({size:[3000, 300, 1], pos:[0,150,-1500], rot:[0,0,0], config:config, name: 'barrier'});
+
+                var barrier_03 = world.add({size:[1, 300, 3000], pos:[1500,150,0], rot:[0,0,0], config:config, name: 'barrier'});
+
+                var barrier_04 = world.add({size:[1, 300, 3000], pos:[-1500,150,0], rot:[0,0,0], config:config, name: 'barrier'});
+
+
+// si può eliminare
+                if (barrier.barrier) {
+                    
+                    addPlane([1, 0.1, 1], [0, 150, 1500], [0,0,0]);
+                    addPlane([1, 0.1, 1], [0, 150, -1500], [0,0,0]);
+                    addPlane([1, 0.1, 1], [1500, 150, 0], [0,Math.PI/2,0]);
+                    addPlane([1, 0.1, 1], [-1500, 150, 0], [0,Math.PI/2,0]);
+
+                }
+
+                // Add object to the scene
+                var x, y, z, w, h, d, t;
+                // max number to woodbox in the scene
+                var i = max;
+
+                while (i--){
+                    if(type===3) {
+                        t = Math.floor(Math.random()*2)+1
+                    } else {
+                        t = type
+                    };
+
+                    // initial random position woodbox
+                    x = Math.random() * 3000 - 1500;
+                    y = 2000;
+                    z = Math.random() * 3000 - 1500;
+                    // size body woodbox
+                    w = 200;
+                    h = 200;
+                    d = 200;
+
+                    // enable/disable collision to barrier
+                    if (barrier.barrier) {
+                        config[4] = all;    
+                    } else {
+                        config[4] = all & ~group3;
+                    }
+                    
+
+                    if(t===1){
+                        config[3] = group2;
+                        // body non visibile del woodbox per le collisioni
+                        bodys[i] = world.add({type:'box', size:[w,h,d], pos:[x,y,z], move:true, config:config, name:'box'});
+
+                        // woodbox visibile
+                        meshs[i] = new THREE.Mesh( bufferRandomGeometry, materialRandomGeometry );
+
+                        meshs[i].scale.set( 1, 1, 1 );
+
+                    } else if(t===2){
+                        config[3] = group2;
+
+                        bodys[i] = world.add({type:'box', size:[w*2,h,d], pos:[x,y,z], move:true, config:config, name:'box'});
+
+                        meshs[i] = new THREE.Mesh( bufferRandomGeometry, materialRandomGeometry );
+
+                        meshs[i].scale.set( 2, 1, 1 );
+                    }
+
+                    meshs[i].castShadow = true;
+                    meshs[i].receiveShadow = true;
+
+                    scene.add( meshs[i] );
+                }
+
+                config[3] = group1;
+                config[4] = all;
+
+                // body to geoBoxModel
+                bodys[max] = world.add({size:[200, 340, 200], pos:[0,17000,0], rot:[0,0,0], move:true, noSleep:true, config:config, name:'cage', kinematic:true });
+
+                // geoBox model
+                meshs[max] = new THREE.Mesh( bufferRandomGeometry, materialCage );
+                meshs[max].scale.set( 1, 1.7, 1 );
+
+                scene.add( meshs[max] );
+            }
+
+            function updateOimoPhysics() {
+
+                if(world == null) return;
+
+                // ####################### //
+                // #### Gravity World #### //
+                // ####################### //
+                
+                //var nG = document.getElementById("gravity").value
+
+                // update world
+                world.step();
+
+                // apply new position on last rigidbody
+                bodys[bodys.length-1].setPosition(cage.position);
+
+                var p, r, m, x, y, z;
+                var mtx = new THREE.Matrix4();
+                var i = bodys.length;
+                var mesh;
+                var body;
+
+                while (i--){
+                    body = bodys[i];
+                    mesh = meshs[i];
+
+                    mesh.position.copy(body.getPosition());
+                    mesh.quaternion.copy(body.getQuaternion());
+
+                    // reset position
+                    if(mesh.position.y<-5000){
+                        // posizioni random dei woodbox che riappaiono
+                        // posizioni diverse dall'inizio per evitare che compaiano suol bordo e poi cadono
+                        x = Math.random() * 2000 - 1000;
+                        y = 2000;
+                        z = Math.random() * 2000 - 1000;
+                        body.resetPosition(x,y,z);
+                    }
+                }
+
+                // ###################### //
+                // #### INFO OIMO.JS #### //
+                // ###################### //
+                //infos.innerHTML = world.getInfo();
+                
+            }
+
+
+            function clearMesh(){
+                var i = meshs.length;
+                while (i--) scene.remove(meshs[ i ]);
+                i = grounds.length;
+                while (i--) scene.remove(grounds[ i ]);
+                grounds = [];
+                meshs = [];
+            }
+
+            function addPlane(size, position, rotation) {
+                var mesh;
+                
+                mesh = new THREE.Mesh( planeGeometry, planeMaterial );
+
+                mesh.scale.set( size[0], size[1], size[2] );
+                mesh.position.set( position[0], position[1], position[2] );
+                mesh.rotation.set( rotation[0], rotation[1], rotation[2] );
+                
+                if(!grounds.length) {
+                    content.add( mesh )
+                } else {
+                    scene.add( mesh )
+                };
+
+                grounds.push(mesh);
+                mesh.castShadow = false;
+                mesh.receiveShadow = true;
+            }
+
+            // function for convert deg in rad
+            function degToRad(deg) {
+                var rad = (deg * Math.PI) / 180;
+                return rad;
+            }
+
+            function backgroundSceneTexture(){
+                var textureScene = new THREE.CubeTextureLoader().load([
+                    'texture/skybox/posx.jpg',
+                    'texture/skybox/negx.jpg',
+                    'texture/skybox/posy.jpg',
+                    'texture/skybox/negy.jpg',
+                    'texture/skybox/posz.jpg',
+                    'texture/skybox/negz.jpg'
+                ]);
+                return textureScene;
+            }
+
+            // function for resize window
+            function windowResize() {
+
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+
+                renderer.setSize( window.innerWidth, window.innerHeight );
+
+            }
+
+            function setupTween() {
+                // update smooth animation
+                var update  = function(){
+                    legDX.rotation.x = currentLeg.x;
+                    legSX.rotation.x = -currentLeg.x;
+                    harmDX.rotation.x = currentHarm.x;
+                    harmSX.rotation.x = -currentHarm.x;
+                    torso.rotation.z = currentTorso.z;
+                }
+
+                var currentLeg = { x: userOpts.positionLeg };
+                var currentHarm = { x: userOpts.initialHarm };
+                var currentTorso = { z: userOpts.positionTorso};
+
+                // remove previous tweens if needed
+                TWEEN.removeAll();
+                
+                // convert the string from dat-gui into tween.js functions 
+                var easing  = TWEEN.Easing[userOpts.easing.split('.')[0]][userOpts.easing.split('.')[1]];
+
+                // ############# //
+                // #### Leg #### //
+                // ############# //
+
+                // build the tween to go ahead
+                tweenHeadLeg   = new TWEEN.Tween(currentLeg)
+                    .to({x: -userOpts.positionLeg}, userOpts.duration)
+                    .delay(userOpts.delay)
+                    .easing(easing)
+                    .onUpdate(update);
+                // build the tween to go backward
+                var tweenBackLeg   = new TWEEN.Tween(currentLeg)
+                    .to({x: +userOpts.positionLeg}, userOpts.duration)
+                    .delay(userOpts.delay)
+                    .easing(easing)
+                    .onUpdate(update);
+
+                // after tweenHead do tweenBack
+                tweenHeadLeg.chain(tweenBackLeg);
+                // after tweenBack do tweenHead, so it is cycling
+                tweenBackLeg.chain(tweenHeadLeg);
+
+                // ############## //
+                // #### Harm #### //
+                // ############## //
+
+                // build the tween to go ahead
+                tweenHeadHarm   = new TWEEN.Tween(currentHarm)
+                    .to({x: userOpts.positionHarm}, userOpts.duration)
+                    .delay(userOpts.delay)
+                    .easing(easing)
+                    .onUpdate(update);
+                // build the tween to go backward
+                var tweenBackHarm   = new TWEEN.Tween(currentHarm)
+                    .to({x: userOpts.initialHarm}, userOpts.duration)
+                    .delay(userOpts.delay)
+                    .easing(easing)
+                    .onUpdate(update);
+
+                // after tweenHead do tweenBack
+                tweenHeadHarm.chain(tweenBackHarm);
+                // after tweenBack do tweenHead, so it is cycling
+                tweenBackHarm.chain(tweenHeadHarm);
+
+
+                // ############### //
+                // #### Torso #### //
+                // ############### //
+
+                // build the tween to go ahead
+                tweenHeadTorso   = new TWEEN.Tween(currentTorso)
+                    .to({z: -userOpts.positionTorso}, userOpts.duration)
+                    .delay(userOpts.delay)
+                    .easing(easing)
+                    .onUpdate(update);
+                // build the tween to go backward
+                var tweenBackTorso   = new TWEEN.Tween(currentTorso)
+                    .to({z: +userOpts.positionTorso}, userOpts.duration)
+                    .delay(userOpts.delay)
+                    .easing(easing)
+                    .onUpdate(update);
+
+                // after tweenHead do tweenBack
+                tweenHeadTorso.chain(tweenBackTorso);
+                // after tweenBack do tweenHead, so it is cycling
+                tweenBackTorso.chain(tweenHeadTorso);
+            }
+
+            // function to enable the shadow for all child of the model
+            function enableShadowChild(model) {
+
+                model.traverse( function( child ) { 
+
+                    if ( child.isMesh ) {
+
+                        child.castShadow = true;
+                        child.receiveShadow = true;
+
+                    }
+                } );
+            }
+
+            // function that controls when a key is pressed
+            function _onKeyDown(event) {
+                switch (event.keyCode) {
+                  case 87: // w
+                    move.forward = true;
+                    break;
+                  case 65: // a
+                    move.left = true;
+                    break;
+                  case 83: // s
+                    move.backward = true;
+                    break;
+                  case 68: // d
+                    move.right = true;
+                    break;
+                  case 38: // up
+                  case 37: // left
+                  case 40: // down
+                  case 39: // right
+                    break;
+                }
+            }
+
+            // function that controls when a key is released
+            function _onKeyUp(event) {
+                switch(event.keyCode) {
+                  case 87: // w
+                    move.forward = false;
+                    break;
+                  case 65: // a
+                    move.left = false;
+                    break;
+                  case 83: // s
+                    move.backward = false;
+                    break;
+                  case 68: // d
+                    move.right = false;
+                    break;
+                  case 38: // up
+                  case 37: // left
+                  case 40: // down
+                  case 39: // right
+                    break;
+                }
+            }
+
+            // ########################## //
+            // #### GUI - Controller #### //
+            // ########################## //
+
+            function createGUI() {
+                var gui = new dat.GUI( { autoPlace: true } );
+
+                var options = {
+                    resetSpot: function() {
+                        spotLight.position.x = 0;
+                        spotLight.position.z = 0;
+                        spotLight.color = new THREE.Color( 0xffffff );
+                        colorLight.spot = '#ffffff';
+                        spotLight.angle = 0.26;
+                        spotLight.intensity = 0.5;
+                        spotLight.visible = true;
+                    },
+                    resetAmbi: function() {
+                        ambient.color = new THREE.Color( 0xffffff );
+                        colorLight.ambient = '#ffffff';
+                        ambient.intensity = 0.5;
+                        ambient.visible = true;
+                    },
+                    resetDirLight: function() {
+                        directionalLight.color = new THREE.Color( 0xffffff );
+                        colorLight.directional = '#ffffff';
+                        directionalLight.intensity = 0.5;
+                        directionalLight.visible = true;
+                    },
+                    resetPLight: function() {
+                        pointLight.position.x = 0;
+                        pointLight.position.y = 1000;
+                        pointLight.position.z = 0;
+                        pointLight.color = new THREE.Color( 0xffffff );
+                        colorLight.Point = '#ffffff';
+                        pointLight.intensity = 0.5;
+                        pointLight.visible = true;
+                    },
+                    resetAll: function() {
+                        options.resetSpot();
+                        options.resetAmbi();
+                        options.resetDirLight();
+                        options.resetPLight();
+                    }
+                };
+
+                // Gravity
+                gui.add(world.gravity, 'y', -20, 10, 1).name('Set Gravity').listen();
+
+                // HELPER
+                var helper = gui.addFolder('Helper');
+                helper.add(axesHelper, 'visible').name('Axes Helper').listen();
+                helper.add(materialCage, 'visible').name('Wirefram Cage Model').listen();
+                helper.add(spotHelper, 'visible').name('Spotlight Helper').listen();
+                helper.add(dirLightHelper, 'visible').name('DirectionalLight Helper').listen();
+                helper.add(pointLightHelper, 'visible').name('PointLight Helper').listen();
+                
+                // LIGHT
+                var light = gui.addFolder('Light');
+
+                // Spotlight
+                var spot = light.addFolder('SpotLight');
+                spot.add(spotLight, 'visible').name('On/Off').listen();
+                spot.add(spotLight.position, 'x', -1500, 1500).name('pos x').listen();
+                spot.add(spotLight.position, 'z', -1500, 1500).name('pos z').listen();
+                spot.addColor(colorLight, 'spot')
+                    .listen()
+                    .onChange( function() {
+                        var temp = new THREE.Color(colorLight.spot);
+                        spotLight.color = temp; 
+                    } );
+                spot.add(spotLight, 'intensity', 0, 2).listen();
+                spot.add(spotLight, 'angle', 0.17, 0.52).listen();
+                spot.add(options, 'resetSpot').name('Reset');
+
+                // Ambient light
+                var ambi = light.addFolder('Ambient Light');
+                ambi.add(ambient, 'visible').name('On/Off').listen();
+                ambi.addColor(colorLight, 'ambient')
+                    .listen()
+                    .onChange( function() {
+                        var temp = new THREE.Color(colorLight.ambient);
+                        ambient.color = temp; 
+                    } );
+                ambi.add(ambient, 'intensity', 0, 2).listen();
+                ambi.add(options, 'resetAmbi').name('Reset');
+
+                // Directional Light
+                var dirlight = light.addFolder('Directional Light');
+                dirlight.add(directionalLight, 'visible').name('On/Off').listen();
+                dirlight.addColor(colorLight, 'directional')
+                    .listen()
+                    .onChange( function() {
+                        var temp = new THREE.Color(colorLight.directional);
+                        directionalLight.color = temp; 
+                    } );
+                dirlight.add(directionalLight, 'intensity', 0, 2). listen();
+                dirlight.add(options, 'resetDirLight').name('Reset');
+
+                // PointLight
+                var pLight = light.addFolder('PointLight');
+                pLight.add(pointLight, 'visible').name('On/Off');
+                pLight.add(pointLight.position, 'x', -1500, 1500).name('pos x').listen();
+                pLight.add(pointLight.position, 'y', 0, 1500).name('pos y').listen();
+                pLight.add(pointLight.position, 'z', -1500, 1500).name('pos z').listen();
+                pLight.addColor(colorLight, 'point')
+                    .listen()
+                    .onChange( function() {
+                        var temp = new THREE.Color(colorLight.point);
+                        pointLight.color = temp; 
+                    } );
+                pLight.add(pointLight, 'intensity', 0, 2).listen();
+                pLight.add(options, 'resetPLight').name('Reset');
+   
+                helper.open();
+                light.open();
+                gui.add(options, 'resetAll').name('Reset All');
+
+            }
+
+
+            // ################ //
+            // #### Render #### //
+            // ################ //
+
+            var step = 5; // 100 pixels
+            var rotateAngle = 1.5;   // (45 degrees) per second
+
+            function render() {
+
+                requestAnimationFrame(render);
+
+                orbitControls.update();
+
+                updateOimoPhysics();
+
+                cage.position.y = 170;
+
+                // checking that the model is loaded
+                if (model != undefined) {
+                    // update the tweens from TWEEN library
+                    TWEEN.update();
+
+                    if (move.forward == true || move.backward == true) {
+                        tweenHeadLeg.start();
+                        tweenHeadHarm.start();
+                        tweenHeadTorso.start();
+
+                        if (move.forward == true) {
+                            if(!world.checkContact('cage', 'barrier')) {
+                            //Forward
+                            var moveX = model.position.x + Math.cos( rotateAngle ) * step;
+                            var moveZ = model.position.z + Math.sin( rotateAngle ) * step;
+                            
+                            model.position.x = moveX;
+                            model.position.z = moveZ;
+
+                            target.position.x = moveX;
+                            target.position.z = moveZ;
+
+                            cage.position.x = moveX;
+                            cage.position.z = moveZ;
+                            
+                            } else {
+                                if (Math.sign(model.position.x) == 1) {
+                                    model.position.x -= 2;
+                                    target.position.x -= 2;
+                                    cage.position.x -= 2;
+                                } else {
+                                    model.position.x += 2;
+                                    target.position.x += 2;
+                                    cage.position.x += 2;
+                                }
+
+                                if (Math.sign(model.position.z) == 1) {
+                                    model.position.z -= 2;
+                                    target.position.z -= 2;
+                                    cage.position.z -= 2;
+                                } else {
+                                    model.position.z += 2;
+                                    target.position.z += 2;
+                                    cage.position.z += 2;
+                                }
+                            }
+                        }
+                        if (move.backward == true) {
+                            if(!world.checkContact('cage', 'barrier')) {
+                            //Backward
+                                var moveX = model.position.x - Math.cos( rotateAngle ) * step;
+                                var moveZ = model.position.z - Math.sin( rotateAngle ) * step;
+
+                                model.position.x = moveX;
+                                model.position.z = moveZ;
+
+                                target.position.x = moveX;
+                                target.position.z = moveZ;
+
+                                cage.position.x = moveX;
+                                cage.position.z = moveZ;
+                            } else {
+                                if (Math.sign(model.position.x) == 1) {
+                                    model.position.x -= 2;
+                                    target.position.x -= 2;
+                                    cage.position.x -= 2;
+                                } else {
+                                    model.position.x += 2;
+                                    target.position.x += 2;
+                                    cage.position.x += 2;
+                                }
+
+                                if (Math.sign(model.position.z) == 1) {
+                                    model.position.z -= 2;
+                                    target.position.z -= 2;
+                                    cage.position.z -= 2;
+                                } else {
+                                    model.position.z += 2;
+                                    target.position.z += 2;
+                                    cage.position.z += 2;
+                                }
+                            }
+                        }
+
+                        if (move.left == true) {
+                            rotateAngle -= 0.01;
+                            model.rotation.y -= 0.01;
+                        }
+                        if (move.right == true){
+                            rotateAngle += 0.01;
+                            model.rotation.y += 0.01;
+                        }
+
+                    } else {
+                        tweenHeadLeg.stop();
+                        tweenHeadHarm.stop();
+                        tweenHeadTorso.stop();
+                    }
+
+                renderer.render(scene, camera);
+                }
+            }
+
+            // calls the init function when the window is done loading.
+            window.onload = init;
+
+        </script>
+
+    </body>
+</html>
