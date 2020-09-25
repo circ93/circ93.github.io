@@ -75,13 +75,10 @@
             // light variables
             var target;
 
-            // Geometry
-            var objects = [];
-
             // oimo variables
-            var content;
             var world = null;
-            var bodys = null;
+            var bodys = [];
+            var meshs = [];
             var max = 15;
 
             var bufferRandomGeometry;
@@ -96,9 +93,6 @@
             var barrier_2;
             var barrier_3;
 
-            var meshs = [];
-            var grounds = [];
-
             // gui
             var axesHelper;
             var spotLight;
@@ -112,10 +106,10 @@
 
             function init() {
 
-                // create a scene, that will hold all our elements such as objects, cameras and lights.
+                // create a scene, which will contain all our elements such as objects, cameras and lights.
                 scene = new THREE.Scene();
 
-                // set backgroun color for the scene
+                // set backgroun for the scene
                 scene.background = backgroundSceneTexture();
 
                 // create a camera, which defines where we're looking at.
@@ -129,13 +123,9 @@
                 renderer.setSize(window.innerWidth, window.innerHeight);
                 renderer.shadowMap.enabled = true;
                 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-                //renderer.depthBuffer = false;
 
                 // add the output of the renderer to the html element
                 document.body.appendChild(renderer.domElement);
-
-                content = new THREE.Object3D();
-                scene.add(content);
 
                 // ###################### //
                 // #### OrbitControl #### //
@@ -153,7 +143,7 @@
                 orbitControls.rotateSpeed = 0.3;
 
                 // ############### //
-//              // #### Plane #### //
+                // #### Plane #### //
                 // ############### //
 
                 //Create a plane that receives shadows
@@ -164,6 +154,8 @@
                 texturePlane.wrapT = THREE.RepeatWrapping;
                 texturePlane.repeat.set( 6, 6 );                
                 planeMaterial = new THREE.MeshLambertMaterial( { color: 0xffffff, map:texturePlane, side: THREE.DoubleSide } );
+//?
+                planeMaterial.castShadow = true;
 
                 // ################## //
                 // #### Geometry #### //
@@ -181,10 +173,13 @@
 
                 materialRandomGeometry = new THREE.MeshPhongMaterial( {map: textureBox, name:'woodBox'} );
 
+                // ############## //
+                // #### Cage #### //
+                // ############## //
+
                 materialCage = new THREE.MeshLambertMaterial( {color: 0xffffff, wireframe: true} );
                 materialCage.visible = false;
 
-                // gabbia modello per spinge gli altri box
                 cage = new THREE.Object3D();
 
                 // ############### //
@@ -199,16 +194,16 @@
                 }
 
                 // Ambient light
-                ambient = new THREE.AmbientLight(0xffffff, 0.5);
+                ambient = new THREE.AmbientLight(colorLight.ambient, 0.5);
                 scene.add(ambient);
 
                 // Directional light
-                directionalLight = new THREE.DirectionalLight( 0xffffff, 0.5);
+                directionalLight = new THREE.DirectionalLight( colorLight.directional, 0.5);
                 directionalLight.castShadow = true;
                 scene.add( directionalLight );
 
                 //Point light
-                pointLight = new THREE.PointLight(0xffffff, 0.5);
+                pointLight = new THREE.PointLight(colorLight.point, 0.5);
                 pointLight.position.set(0,1000,0);
                 pointLight.castShadow = true;
                 pointLight.shadow.camera.near = 500;
@@ -254,14 +249,6 @@
 
                     torso = gltf.scene.children[0].children[0].children[0].children[0].children[0].children[0].children[0];
 
-                    console.log("modello: " + model.name);
-                    console.log("gamba sx: " + legSX.name);
-                    console.log("gamba dx: " + legDX.name);
-                    console.log("braccio sx: " + harmSX.name);
-                    console.log("braccio dx: " + harmDX.name);
-                    console.log("torso: " + torso);
-                    console.log(model);
-
                     model.scale.set(30,30,30);
                     model.position.set(0,50,0);
                     model.rotation.x = Math.PI;
@@ -285,9 +272,9 @@
                 axesHelper.visible = false;
                 scene.add( axesHelper );
 
-                // asse x   --> red
-                // asse y   --> green
-                // asse z   --> blue
+                // axis x   --> red
+                // axis y   --> green
+                // axis z   --> blue
 
                 spotHelper = new THREE.CameraHelper( spotLight.shadow.camera );
                 spotHelper.visible = false;
@@ -297,14 +284,9 @@
                 dirLightHelper.visible = false;
                 scene.add( dirLightHelper );
 
-                var sphereSize = 10;
-                pointLightHelper = new THREE.PointLightHelper( pointLight, sphereSize );
+                pointLightHelper = new THREE.PointLightHelper( pointLight, 20 );
                 pointLightHelper.visible = false;
                 scene.add( pointLightHelper );
-
-                // #################### //
-                // #### END HELPER #### //
-                // #################### //
 
                 // initial setup of the tweens
                 setupTween();
@@ -331,14 +313,16 @@
             // ######################## //
 
             function initOimoPhysics(){
-
+                // create the world at Oimo
                 world = new OIMO.World({info:true, worldscale:100});
+                // set initial gravity
                 world.setGravity([0, -9.8, 0]);
 
                 populate();
 
             };
 
+            // function to populate the world of Oimo
             function populate() {
 
                 // The Bit of a collision group
@@ -347,7 +331,7 @@
                 var group3 = 1 << 2;  // 00000000 00000000 00000000 00000100
                 var all = 0xffffffff; // 11111111 11111111 11111111 11111111
 
-                // reset old
+                // reset world
                 clearMesh();
                 world.clear();
                 bodys = [];
@@ -361,17 +345,15 @@
                     all // The bits of the collision groups with which the shape collides.
                 ];
 
-                // config[3] --> I bit dei gruppi di collisione a cui appartiene la forma.
-                // config[4] --> I bit dei gruppi di collisione con cui la forma si scontra.                
-
-                //add ground (superficie d'appoggio dei woodbox, non si vede)
+                // add ground
                 var ground = world.add({size:[3000, 1, 3000], pos:[0,0,0], rot:[0,0,0], config:config});
                 // visible plane whit texture
                 addPlane([1, 1, 1], [0, 0, 0], [-Math.PI/2,0,0]).visible = true;
 
-                // add barriere
+                // the barriers are part of group three of collisions
                 config[3] = group3;
 
+                // create four barrier
                 var barrier_01 = world.add({size:[3000, 300, 1], pos:[0,150,1500], rot:[0,0,0], config:config, name: 'barrier'});
 
                 var barrier_02 = world.add({size:[3000, 300, 1], pos:[0,150,-1500], rot:[0,0,0], config:config, name: 'barrier'});
@@ -388,19 +370,18 @@
 
                 // Add object to the scene
                 var x, y, z, w, h, d, t;
-                // max number to woodbox in the scene
+                // max number to box in the scene
                 var i = max;
-                console.log(max);
 
                 while (i--){
-
+                    // random value to choose which shape to render, cube or parallelepiped
                     t = Math.floor(Math.random()*2)+1;
 
-                    // initial random position woodbox
+                    // initial random position box
                     x = Math.random() * 3000 - 1500;
                     y = 2000;
                     z = Math.random() * 3000 - 1500;
-                    // size body woodbox
+                    // size body box
                     w = 200;
                     h = 200;
                     d = 200;
@@ -414,18 +395,18 @@
                     
 
                     if(t===1){
+                        // the shapes are part of group two of collisions
                         config[3] = group2;
-                        // body non visibile del woodbox per le collisioni
+                        // create body and mesh of box
                         bodys[i] = world.add({type:'box', size:[w,h,d], pos:[x,y,z], move:true, config:config, name:'box'});
 
-                        // woodbox visibile
                         meshs[i] = new THREE.Mesh( bufferRandomGeometry, materialRandomGeometry );
 
                         meshs[i].scale.set( 1, 1, 1 );
 
                     } else if(t===2){
                         config[3] = group2;
-
+                        // create body and mesh of parallelepiped
                         bodys[i] = world.add({type:'box', size:[w*2,h,d], pos:[x,y,z], move:true, config:config, name:'box'});
 
                         meshs[i] = new THREE.Mesh( bufferRandomGeometry, materialRandomGeometry );
@@ -439,36 +420,38 @@
                     scene.add( meshs[i] );
                 }
 
+                // the cage is part of group one collisions
                 config[3] = group1;
                 config[4] = all;
 
-                // body to BoxModel
+                // create boy and mesh of cage
                 bodys[max] = world.add({size:[200, 340, 200], pos:[0,0,0], rot:[0,0,0], move:true, noSleep:false, config:config, name:'cage', kinematic:true });
                 cage.position.set(0,170,0);
 
-                // BoxModel
                 meshs[max] = new THREE.Mesh( bufferRandomGeometry, materialCage );
                 meshs[max].scale.set( 1, 1.7, 1 );
 
                 scene.add( meshs[max] );
             }
 
+            // function to update the elements of the Oimo world
             function updateOimoPhysics() {
 
+                // I check that the Oimo world has been created
                 if(world == null) return;
 
                 // update world
                 world.step();
 
-                // apply new position on last rigidbody
+                // I apply the position of the cage to the body in last position
                 bodys[bodys.length-1].setPosition(cage.position);
 
-                var p, r, m, x, y, z;
-                var mtx = new THREE.Matrix4();
+                var x, y, z;
                 var i = bodys.length;
                 var mesh;
                 var body;
 
+                // I apply the position of the body to all the corresponding meshes
                 while (i--){
                     body = bodys[i];
                     mesh = meshs[i];
@@ -476,29 +459,27 @@
                     mesh.position.copy(body.getPosition());
                     mesh.quaternion.copy(body.getQuaternion());
 
-                    // reset position
+                    // reset position box
                     if(mesh.position.y<-5000){
-                        // posizioni random dei woodbox che riappaiono
-                        // posizioni diverse dall'inizio per evitare che compaiano suol bordo e poi cadono
+                        // random position of the boxes that reappear
                         x = Math.random() * 2000 - 1000;
                         y = 2000;
                         z = Math.random() * 2000 - 1000;
                         body.resetPosition(x,y,z);
                     }
                 }
-                
             }
 
-
+            // function to remove meshes from the world
             function clearMesh(){
                 var i = meshs.length;
-                while (i--) scene.remove(meshs[ i ]);
-                i = grounds.length;
-                while (i--) scene.remove(grounds[ i ]);
-                grounds = [];
+                while (i--) {
+                    scene.remove(meshs[ i ]);
+                }
                 meshs = [];
             }
 
+            // function to add plane to the scene
             function addPlane(size, position, rotation) {
                 var mesh;
                 
@@ -508,16 +489,10 @@
                 mesh.position.set( position[0], position[1], position[2] );
                 mesh.rotation.set( rotation[0], rotation[1], rotation[2] );
                 
-                if(!grounds.length) {
-                    content.add( mesh )
-                } else {
-                    scene.add( mesh )
-                };
-
-                grounds.push(mesh);
                 mesh.castShadow = false;
                 mesh.receiveShadow = true;
                 mesh.visible = false;
+                scene.add( mesh );
 
                 return mesh;
             }
@@ -528,6 +503,7 @@
                 return rad;
             }
 
+            // function to load background images of the scene
             function backgroundSceneTexture(){
                 var textureScene = new THREE.CubeTextureLoader().load([
                     'texture/skybox/posx.jpg',
@@ -567,7 +543,7 @@
                 // remove previous tweens if needed
                 TWEEN.removeAll();
                 
-                // convert the string from dat-gui into tween.js functions 
+                // type of easing
                 var easing  = TWEEN.Easing[userOpts.easing.split('.')[0]][userOpts.easing.split('.')[1]];
 
                 // ############# //
@@ -705,6 +681,7 @@
             function createGUI() {
                 var gui = new dat.GUI( { autoPlace: true } );
 
+                // options editable via the gui
                 var options = {
                     numBox: 15,
                     refresh: function() {
@@ -838,7 +815,11 @@
    
                 helper.open();
                 light.open();
+
+                // Reset All options
                 gui.add(options, 'resetAll').name('Reset All');
+
+                // Enable/Disable barrier
                 gui.add(options, 'enableBarrier').name('Enable barrier');
                 gui.add(options, 'disableBarrier').name('Disable barrier');
 
@@ -849,33 +830,42 @@
             // #### Render #### //
             // ################ //
 
-            var step = 5; // 100 pixels
-            var rotateAngle = 1.5;   // (45 degrees) per second
+            // step with which the model moves
+            var step = 5;
+            // angle at which the model rotates
+            var rotateAngle = 1.5;
 
             function render() {
 
                 requestAnimationFrame(render);
 
+                // updates the camera coordinates
                 orbitControls.update();
 
                 updateOimoPhysics();
 
                 // checking that the model is loaded
                 if (model != undefined) {
-                    // update the tweens from TWEEN library
+                    // update the tween movement
                     TWEEN.update();
 
+                    // I apply the position of the model to the target of the spotlight
                     target.position.x = model.position.x;
                     target.position.z = model.position.z;
 
+                    // I apply the position of the model to the cage
                     cage.position.x = model.position.x;
                     cage.position.z = model.position.z;
 
+                    // check that at least one key has been pressed to start the movements
                     if (move.forward == true || move.backward == true || move.left == true || move.right == true) {
+                        // I start the chains of tween movements
                         tweenHeadLeg.start();
                         tweenHeadHarm.start();
                         tweenHeadTorso.start();
 
+                        //if there is no contact between the cage and the barriers, I move regularly, 
+                        // otherwise I change the position of the model
                         if (move.forward == true) {
                             if(!world.checkContact('cage', 'barrier')) {
                             //Forward
