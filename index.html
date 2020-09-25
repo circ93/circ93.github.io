@@ -31,6 +31,8 @@
 
             import { GLTFLoader } from './libs/threejs/examples/jsm/loaders/GLTFLoader.js';
 
+            import { DragControls } from './libs/threejs/examples/jsm/controls/DragControls.js';
+
             import * as dat from './libs/threejs/examples/jsm/libs/dat.gui.module.js';
 
             // global variables
@@ -77,18 +79,12 @@
 
             // Geometry
             var objects = [];
-            var cube_1;
 
             // oimo variables
             var content;
-            var paddel;
-            var rotTest;
-            var ToRad = Math.PI / 180;
-
             var world = null;
             var bodys = null;
-            var infos;
-            var type = 1;
+            var max = 15;
 
             var bufferRandomGeometry;
             var materialRandomGeometry;
@@ -96,7 +92,11 @@
             var planeGeometry;
             var cage;
             var materialCage;
-            var barrier = { barrier: false };
+            var barrier = false;
+            var barrier_0;
+            var barrier_1;
+            var barrier_2;
+            var barrier_3;
 
             var meshs = [];
             var grounds = [];
@@ -318,9 +318,6 @@
                 document.addEventListener('keydown', (e) => _onKeyDown(e), false);
                 document.addEventListener('keyup', (e) => _onKeyUp(e), false);
 
-                // div con info su world di oimo
-                infos = document.getElementById("info");
-
                 // physics
                 initOimoPhysics();
 
@@ -340,23 +337,17 @@
                 world = new OIMO.World({info:true, worldscale:100});
                 world.setGravity([0, -9.8, 0]);
 
-                populate(1);
+                populate();
 
             };
 
-            function populate(n) {
+            function populate() {
 
                 // The Bit of a collision group
                 var group1 = 1 << 0;  // 00000000 00000000 00000000 00000001
                 var group2 = 1 << 1;  // 00000000 00000000 00000000 00000010
                 var group3 = 1 << 2;  // 00000000 00000000 00000000 00000100
                 var all = 0xffffffff; // 11111111 11111111 11111111 11111111
-
-                //var max = document.getElementById("MaxNumber").value;
-                var max = 20;
-
-                // type of woodbox
-                type = 3;
 
                 // reset old
                 clearMesh();
@@ -378,7 +369,7 @@
                 //add ground (superficie d'appoggio dei woodbox, non si vede)
                 var ground = world.add({size:[3000, 1, 3000], pos:[0,0,0], rot:[0,0,0], config:config});
                 // visible plane whit texture
-                addPlane([1, 1, 1], [0, 0, 0], [-Math.PI/2,0,0]);
+                addPlane([1, 1, 1], [0, 0, 0], [-Math.PI/2,0,0]).visible = true;
 
                 // add barriere
                 config[3] = group3;
@@ -390,29 +381,22 @@
                 var barrier_03 = world.add({size:[1, 300, 3000], pos:[1500,150,0], rot:[0,0,0], config:config, name: 'barrier'});
 
                 var barrier_04 = world.add({size:[1, 300, 3000], pos:[-1500,150,0], rot:[0,0,0], config:config, name: 'barrier'});
-
-
-// si può eliminare
-                if (barrier.barrier) {
                     
-                    addPlane([1, 0.1, 1], [0, 150, 1500], [0,0,0]);
-                    addPlane([1, 0.1, 1], [0, 150, -1500], [0,0,0]);
-                    addPlane([1, 0.1, 1], [1500, 150, 0], [0,Math.PI/2,0]);
-                    addPlane([1, 0.1, 1], [-1500, 150, 0], [0,Math.PI/2,0]);
+                barrier_0 = addPlane([1, 0.1, 1], [0, 150, 1500], [0,0,0]);
+                barrier_1 = addPlane([1, 0.1, 1], [0, 150, -1500], [0,0,0]);
+                barrier_2 = addPlane([1, 0.1, 1], [1500, 150, 0], [0,Math.PI/2,0]);
+                barrier_3 = addPlane([1, 0.1, 1], [-1500, 150, 0], [0,Math.PI/2,0]);
 
-                }
 
                 // Add object to the scene
                 var x, y, z, w, h, d, t;
                 // max number to woodbox in the scene
                 var i = max;
+                console.log(max);
 
                 while (i--){
-                    if(type===3) {
-                        t = Math.floor(Math.random()*2)+1
-                    } else {
-                        t = type
-                    };
+
+                    t = Math.floor(Math.random()*2)+1;
 
                     // initial random position woodbox
                     x = Math.random() * 3000 - 1500;
@@ -424,7 +408,7 @@
                     d = 200;
 
                     // enable/disable collision to barrier
-                    if (barrier.barrier) {
+                    if (barrier) {
                         config[4] = all;    
                     } else {
                         config[4] = all & ~group3;
@@ -460,10 +444,11 @@
                 config[3] = group1;
                 config[4] = all;
 
-                // body to geoBoxModel
-                bodys[max] = world.add({size:[200, 340, 200], pos:[0,17000,0], rot:[0,0,0], move:true, noSleep:true, config:config, name:'cage', kinematic:true });
+                // body to BoxModel
+                bodys[max] = world.add({size:[200, 340, 200], pos:[0,0,0], rot:[0,0,0], move:true, noSleep:false, config:config, name:'cage', kinematic:true });
+                cage.position.set(0,170,0);
 
-                // geoBox model
+                // BoxModel
                 meshs[max] = new THREE.Mesh( bufferRandomGeometry, materialCage );
                 meshs[max].scale.set( 1, 1.7, 1 );
 
@@ -473,12 +458,6 @@
             function updateOimoPhysics() {
 
                 if(world == null) return;
-
-                // ####################### //
-                // #### Gravity World #### //
-                // ####################### //
-                
-                //var nG = document.getElementById("gravity").value
 
                 // update world
                 world.step();
@@ -509,11 +488,6 @@
                         body.resetPosition(x,y,z);
                     }
                 }
-
-                // ###################### //
-                // #### INFO OIMO.JS #### //
-                // ###################### //
-                //infos.innerHTML = world.getInfo();
                 
             }
 
@@ -545,6 +519,9 @@
                 grounds.push(mesh);
                 mesh.castShadow = false;
                 mesh.receiveShadow = true;
+                mesh.visible = false;
+
+                return mesh;
             }
 
             // function for convert deg in rad
@@ -731,6 +708,11 @@
                 var gui = new dat.GUI( { autoPlace: true } );
 
                 var options = {
+                    numBox: 15,
+                    refresh: function() {
+                        max = options.numBox;
+                        populate();
+                    },
                     resetSpot: function() {
                         spotLight.position.x = 0;
                         spotLight.position.z = 0;
@@ -766,11 +748,30 @@
                         options.resetAmbi();
                         options.resetDirLight();
                         options.resetPLight();
+                    },
+                    enableBarrier: function() {
+                        barrier = true;
+                        populate(1);
+                        barrier_0.visible = true;
+                        barrier_1.visible = true;
+                        barrier_2.visible = true;
+                        barrier_3.visible = true;
+                    },
+                    disableBarrier: function() {
+                        barrier = false;
+                        populate(1);
+                        barrier_0.visible = false;
+                        barrier_1.visible = false;
+                        barrier_2.visible = false;
+                        barrier_3.visible = false;
                     }
                 };
 
                 // Gravity
                 gui.add(world.gravity, 'y', -20, 10, 1).name('Set Gravity').listen();
+                gui.add(options, 'numBox', 1, 50, 1).name('Number of Box')
+                    .listen();
+                gui.add(options, 'refresh').name('Refresh Box');
 
                 // HELPER
                 var helper = gui.addFolder('Helper');
@@ -840,6 +841,8 @@
                 helper.open();
                 light.open();
                 gui.add(options, 'resetAll').name('Reset All');
+                gui.add(options, 'enableBarrier').name('Enable barrier');
+                gui.add(options, 'disableBarrier').name('Disable barrier');
 
             }
 
@@ -859,14 +862,18 @@
 
                 updateOimoPhysics();
 
-                cage.position.y = 170;
-
                 // checking that the model is loaded
                 if (model != undefined) {
                     // update the tweens from TWEEN library
                     TWEEN.update();
 
-                    if (move.forward == true || move.backward == true) {
+                    target.position.x = model.position.x;
+                    target.position.z = model.position.z;
+
+                    cage.position.x = model.position.x;
+                    cage.position.z = model.position.z;
+
+                    if (move.forward == true || move.backward == true || move.left == true || move.right == true) {
                         tweenHeadLeg.start();
                         tweenHeadHarm.start();
                         tweenHeadTorso.start();
@@ -880,31 +887,17 @@
                             model.position.x = moveX;
                             model.position.z = moveZ;
 
-                            target.position.x = moveX;
-                            target.position.z = moveZ;
-
-                            cage.position.x = moveX;
-                            cage.position.z = moveZ;
-                            
                             } else {
                                 if (Math.sign(model.position.x) == 1) {
                                     model.position.x -= 2;
-                                    target.position.x -= 2;
-                                    cage.position.x -= 2;
                                 } else {
                                     model.position.x += 2;
-                                    target.position.x += 2;
-                                    cage.position.x += 2;
                                 }
 
                                 if (Math.sign(model.position.z) == 1) {
                                     model.position.z -= 2;
-                                    target.position.z -= 2;
-                                    cage.position.z -= 2;
                                 } else {
-                                    model.position.z += 2;
-                                    target.position.z += 2;
-                                    cage.position.z += 2;
+                                    model.position.z += 2;                                    
                                 }
                             }
                         }
@@ -916,31 +909,17 @@
 
                                 model.position.x = moveX;
                                 model.position.z = moveZ;
-
-                                target.position.x = moveX;
-                                target.position.z = moveZ;
-
-                                cage.position.x = moveX;
-                                cage.position.z = moveZ;
                             } else {
                                 if (Math.sign(model.position.x) == 1) {
                                     model.position.x -= 2;
-                                    target.position.x -= 2;
-                                    cage.position.x -= 2;
                                 } else {
                                     model.position.x += 2;
-                                    target.position.x += 2;
-                                    cage.position.x += 2;
                                 }
 
                                 if (Math.sign(model.position.z) == 1) {
                                     model.position.z -= 2;
-                                    target.position.z -= 2;
-                                    cage.position.z -= 2;
                                 } else {
                                     model.position.z += 2;
-                                    target.position.z += 2;
-                                    cage.position.z += 2;
                                 }
                             }
                         }
