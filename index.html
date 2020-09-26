@@ -10,7 +10,14 @@
         </style>
     </head>
     <body>
-        <div id="info" style="font-size: 1.4em; color: #ffffffa3; position: absolute; margin-top: 2%; margin-left: 3%;">
+        <div id="info" style="font-size: 1.4em; 
+                            color: #ffffff; 
+                            position: absolute; 
+                            background-color: #00000080;
+                            padding: 10px;
+                            border-radius: 5px;
+                            margin-top: 2%; 
+                            margin-left: 2%;">
             <b>Instructions for Use:</b>
             <br><br>
             Press W, A, S, D to move Android Robot
@@ -79,6 +86,7 @@
             var world = null;
             var bodys = [];
             var meshs = [];
+            var grounds = [];
             var max = 15;
 
             var bufferRandomGeometry;
@@ -88,10 +96,6 @@
             var cage;
             var materialCage;
             var barrier = false;
-            var barrier_0;
-            var barrier_1;
-            var barrier_2;
-            var barrier_3;
 
             // gui
             var axesHelper;
@@ -146,16 +150,14 @@
                 // #### Plane #### //
                 // ############### //
 
-                //Create a plane that receives shadows
+                // Create a plane
                 planeGeometry = new THREE.PlaneBufferGeometry( 3000, 3000, 100);
                 // load texture for plane
                 var texturePlane = new THREE.TextureLoader().load( 'texture/steel.png' );
                 texturePlane.wrapS = THREE.RepeatWrapping;
                 texturePlane.wrapT = THREE.RepeatWrapping;
                 texturePlane.repeat.set( 6, 6 );                
-                planeMaterial = new THREE.MeshLambertMaterial( { color: 0xffffff, map:texturePlane, side: THREE.DoubleSide } );
-//?
-                planeMaterial.castShadow = true;
+                planeMaterial = new THREE.MeshPhongMaterial( { color: 0xffffff, map:texturePlane, side: THREE.DoubleSide } );
 
                 // ################## //
                 // #### Geometry #### //
@@ -165,19 +167,19 @@
                 bufferRandomGeometry = new THREE.BufferGeometry();
                 bufferRandomGeometry.fromGeometry(new THREE.CubeGeometry(200,200,200) );
 
-                //textureBox
+                // textureBox
                 var textureBox = new THREE.TextureLoader().load( 'texture/woodbox.png' );
                 textureBox.wrapS = THREE.RepeatWrapping;
                 textureBox.wrapT = THREE.RepeatWrapping;
                 textureBox.repeat.set( 1, 1 );
 
-                materialRandomGeometry = new THREE.MeshPhongMaterial( {map: textureBox, name:'woodBox'} );
+                materialRandomGeometry = new THREE.MeshPhongMaterial( { map: textureBox, name:'woodBox' } );
 
                 // ############## //
                 // #### Cage #### //
                 // ############## //
 
-                materialCage = new THREE.MeshLambertMaterial( {color: 0xffffff, wireframe: true} );
+                materialCage = new THREE.MeshBasicMaterial( { color: 0xffffff, wireframe: true } );
                 materialCage.visible = false;
 
                 cage = new THREE.Object3D();
@@ -202,7 +204,7 @@
                 directionalLight.castShadow = true;
                 scene.add( directionalLight );
 
-                //Point light
+                // Point light
                 pointLight = new THREE.PointLight(colorLight.point, 0.5);
                 pointLight.position.set(0,1000,0);
                 pointLight.castShadow = true;
@@ -210,7 +212,7 @@
                 pointLight.shadow.camera.far = 2400;
                 scene.add(pointLight);
 
-                // target for Spotlight
+                // Target for Spotlight
                 target = new THREE.Object3D();
                 var posTarget = new THREE.Vector3(0, 100, 0);
                 target.position.copy(posTarget);
@@ -233,7 +235,7 @@
                 // #### Model #### //
                 // ############### //
 
-                // load model
+                // Load model
                 var loader = new GLTFLoader();
 
                 loader.load( 'models/android/scene.gltf', function ( gltf ) {
@@ -284,7 +286,7 @@
                 dirLightHelper.visible = false;
                 scene.add( dirLightHelper );
 
-                pointLightHelper = new THREE.PointLightHelper( pointLight, 20 );
+                pointLightHelper = new THREE.PointLightHelper( pointLight, 30 );
                 pointLightHelper.visible = false;
                 scene.add( pointLightHelper );
 
@@ -348,7 +350,7 @@
                 // add ground
                 var ground = world.add({size:[3000, 1, 3000], pos:[0,0,0], rot:[0,0,0], config:config});
                 // visible plane whit texture
-                addPlane([1, 1, 1], [0, 0, 0], [-Math.PI/2,0,0]).visible = true;
+                addPlane([1, 1, 1], [0, 0, 0], [-Math.PI/2,0,0]);
 
                 // the barriers are part of group three of collisions
                 config[3] = group3;
@@ -361,12 +363,14 @@
                 var barrier_03 = world.add({size:[1, 300, 3000], pos:[1500,150,0], rot:[0,0,0], config:config, name: 'barrier'});
 
                 var barrier_04 = world.add({size:[1, 300, 3000], pos:[-1500,150,0], rot:[0,0,0], config:config, name: 'barrier'});
-                    
-                barrier_0 = addPlane([1, 0.1, 1], [0, 150, 1500], [0,0,0]);
-                barrier_1 = addPlane([1, 0.1, 1], [0, 150, -1500], [0,0,0]);
-                barrier_2 = addPlane([1, 0.1, 1], [1500, 150, 0], [0,Math.PI/2,0]);
-                barrier_3 = addPlane([1, 0.1, 1], [-1500, 150, 0], [0,Math.PI/2,0]);
 
+                // I check the barrier value to decide whether to draw the mesh of the barriers
+                if ( barrier ) {
+                    addPlane([1, 0.1, 1], [0, 150, 1500], [0,0,0]);
+                    addPlane([1, 0.1, 1], [0, 150, -1500], [0,0,0]);
+                    addPlane([1, 0.1, 1], [1500, 150, 0], [0,Math.PI/2,0]);
+                    addPlane([1, 0.1, 1], [-1500, 150, 0], [0,Math.PI/2,0]);
+                }
 
                 // Add object to the scene
                 var x, y, z, w, h, d, t;
@@ -476,6 +480,12 @@
                 while (i--) {
                     scene.remove(meshs[ i ]);
                 }
+                i = grounds.length;
+                while (i--) {
+                    // I remove the mesh of the barriers if they have been drawn
+                    scene.remove(grounds[ i ]);
+                }
+                grounds = [];
                 meshs = [];
             }
 
@@ -491,7 +501,7 @@
                 
                 mesh.castShadow = false;
                 mesh.receiveShadow = true;
-                mesh.visible = false;
+                grounds.push(mesh);
                 scene.add( mesh );
 
                 return mesh;
@@ -726,19 +736,11 @@
                     },
                     enableBarrier: function() {
                         barrier = true;
-                        populate(1);
-                        barrier_0.visible = true;
-                        barrier_1.visible = true;
-                        barrier_2.visible = true;
-                        barrier_3.visible = true;
+                        populate();
                     },
                     disableBarrier: function() {
                         barrier = false;
-                        populate(1);
-                        barrier_0.visible = false;
-                        barrier_1.visible = false;
-                        barrier_2.visible = false;
-                        barrier_3.visible = false;
+                        populate();
                     }
                 };
 
